@@ -1,0 +1,206 @@
+#!/bin/bash
+# Description: Nonlinearly build FOD template, with restricted masking rules.
+# author: Xiaoxiao Qi
+# date: 02/05/2020
+
+if [ $# -lt 3 ]
+then
+	echo "Instructions: The script tries to nonlinearly align FOD images."
+	echo "Usage: `basement $0` foddir maskdir outdir."
+	echo "foddir: a folder contains only fods."
+	echo "maskdir: a folder contains only mask."
+	echo "ourdir: all the outputs generated from template building."
+	exit
+fi
+
+# looking around
+scriptdir=$(dirname $0)
+scripts=${scriptdir}/scripts
+utils=${scriptdir}/utils
+
+if [ ! -e "${utils}/average_fods.sh" ];then
+	"Can't find utility files. Please check path or change \${scriptdir}."
+fi
+
+# parse inputs
+foddir=$1
+maskdir=$2
+outdir=$3
+
+# iterative registration parameters
+Niter=6
+
+# cluster parameters
+njobs=78 # assuming 156 per person
+stime="24:00:00"
+ltime="48:00:00"
+threads=2 # multithreading only in registration
+nthreads="${threads}"
+
+# check validation of inputs
+if [ ! -e ${foddir} ];then
+	echo "Fod directory not exists. Please indicate a valid directory."
+fi
+check_count_fod=`ls -1 ${foddir}/*.mif 2>/dev/null | wc -l` # Hardcoded naming pattern
+
+if [ ! -e ${maskdir} ];then
+	echo "Fod directory not exists. Please indicate a valid directory."
+fi
+check_count_mask=`ls -1 ${foddir}/*_mask.mif 2>/dev/null | wc -l` # Hardcoded naming pattern
+
+if [ ${check_count_mask} != ${check_count_fod} ];then
+	echo "Number of masks does not match the number of fod images."
+	echo "Exiting..."
+	exit
+fi
+
+if [ ! -e ${outdir} ];then
+	echo "The indicated output directory does not exist, generating..."
+	mkdir -p ${outdir}
+fi
+
+# Preparing for initiation
+if [ -e ${outdir}/subjects*.txt ];then
+	# Clean up
+	rm ${outdir}/subjects*.txt
+fi
+
+num=0
+for subj in `ls ${foddir}`
+do 
+	fodname=$(basename "${subj}")
+	purename=${fodname%.*}
+	fods_list[${num}]=${foddir}/${fodname}
+	masks_list[${num}]=${maskdir}/${purename}_mask.mif # hardcoded
+	echo ${subj} >> ${outdir}/subjects.txt
+	echo ${maskdir}/${purename}_mask.mif >> ${outdir}/subjects_masks.txt
+	let num=num+1
+done
+# Checking names of masks by length of the lists
+nfods=${#fods_list[@]}
+nmasks=${#masks_list[@]}
+if [ ${nfods} -ne ${nmasks} ];then
+	echo "Check the names of masks, should be hardcoded name patterns '<fodname>_mask.mif'"
+	echo "Exiting..."
+	exit
+fi
+
+# main loop initiation
+# preparing inital template # can be changed later
+count=0
+## Preparing job folders
+jobdir="${outdir}/jobdir_iter${count}"
+if [ -d ${jobdir} ];then
+	rm -rf ${jobdir}
+	mkdir -p ${jobdir}
+else
+	mkdir -p ${jobdir}
+fi
+## preparing cmds
+cmd0="bash ${scripts}/get_mean_masked_average.sh ${outdir}/subjects.txt ${outdir}/subjects_masks.txt ${outdir}/fod_template_iter${count}.mif"
+### preparing jobs
+joblist="${jobdir}/joblist_avrg${count}.txt"
+jobname="avrg${count}"
+jobscript="${jobdir}/job_${jobname}_qsub.sh"
+echo '#!/bin/bash'>${jobscript}
+echo ${cmd0}>>${jobscript}
+echo ${jobname}>>${joblist}
+bash ${utils}/submit_jobs_v9_wait ${joblist} ${ltime} 40G ${threads} ${jobdir} 1
+
+# main loop
+while [ ${count} -lt ${Niter} ] # start from 0
+do
+	# REGISTRATION
+	## indicate target
+	template_name="${outdir}/fod_template_iter${count}.mif"
+	## indicate jobdir
+	jobdir="${outdir}/jobdir_iter${count}"
+	if [ -d ${jobdir} ];then
+		rm -rf ${jobdir}
+		mkdir -p ${jobdir}
+	else
+		mkdir -p ${jobdir}
+	fi
+	## do registration
+	for (( i=0; i<$nfods; i++ ))
+	do
+		fod=${fods_list[$i]}
+		mask=${masks_list[$i]}
+
+		filename=$(basename "${fod}")
+        extension="${filename##*.}"
+        filename="${filename%.*}"
+
+        cmd="bash ${scripts}/get_nl_masked_registration.sh ${fod} ${mask} ${template_name} ${outdir} ${nthreads}"
+        joblist="${jobdir}/joblist_reg.txt"
+        jobname="fodreg${count}_${i}"
+        jobscript=${jobdir}/job_${jobname}_qsub.sh
+        echo '#!/bin/bash'>${jobscript}
+        echo ${cmd}>>${jobscript}
+        echo ${jobname}>>${joblist}
+
+        ## record outputs
+        echo "${outdir}/${filename}_warp.mif" >> ${outdir}/subjects_warps.txt
+        echo "${outdir}/${filename}_warp.nii.gz" >> ${outdir}/subjects_warps_ants.txt
+        echo "${outdir}/${filename}_warp_inv.mif" >> ${outdir}/subjects_warps_inv.txt
+        echo "${outdir}/${filename}_warped.mif" >> ${outdir}/subjects_warped.txt
+        #echo "${outdir}/${filename}_warp_inv.nii.gz" >> ${outdir}/subjects_warps_inv_ants.txt
+        
+    done
+        bash ${utils}/submit_jobs_v9_wait ${joblist} ${stime} 8G ${threads} ${jobdir} ${nfods}
+
+    #SHAPE UPDATE
+    ## average inverse
+    cmd="bash ${scripts}/get_mean_masked_average.sh ${outdir}/subjects_warps_inv.txt ${outdir}/subjects_masks.txt ${outdir}/avrginvwarp_iter${count}.mif"
+    joblist="${jobdir}/joblist_avrginvwarp.txt"
+	jobname="avrginvwarp${count}"
+	jobscript="${jobdir}/job_${jobname}_qsub.sh"
+	echo '#!/bin/bash'>${jobscript}
+	echo ${cmd}>>${jobscript}
+	echo ${jobname}>>${joblist}
+	bash ${utils}/submit_jobs_v9_wait ${joblist} ${ltime} 8G ${threads} ${jobdir} 1
+	## mask the inverse file to generate shape update and apply it to subjects
+	for (( i=0; i<$nfods; i++ ))
+	do
+		fod=${fods_list[$i]}
+		mask=${masks_list[$i]}
+
+		filename=$(basename "${fod}")
+        extension="${filename##*.}"
+        filename="${filename%.*}"
+
+        cmd1="bash ${utils}/mul_images.sh ${outdir}/avrginvwarp_iter${count}.mif ${mask} ${outdir}/${filename}_warp_su.mif"
+        cmd2="bash ${scripts}/convert_miftrans2ants.sh ${template_name} ${outdir}/${filename}_warp_su.mif ${fod} ${outdir}/${filename}_warp_su.nii.gz"
+        cmd3="transformcompose -template ${template_name} ${outdir}/${filename}_warp.mif ${outdir}/${filename}_warp_su.mif ${outdir}/${filename}_warp_comb.mif -nthreads ${threads} -force -datatype float32"
+        cmd4="mrtransform -warp ${outdir}/${filename}_warp_comb.mif -template ${template_name} ${fod} ${outdir}/${filename}_warped.mif -nthreads ${threads} -force -datatype float32"
+
+        joblist="${jobdir}/joblist_update.txt"
+        jobname="fod_su${count}_${i}"
+        jobscript="${jobdir}/job_${jobname}_qsub.sh"
+        echo '#!/bin/bash'>${jobscript}
+        echo ${cmd1}>>${jobscript}
+        echo ${cmd2}>>${jobscript}
+        echo ${cmd3}>>${jobscript}
+        echo ${cmd4}>>${jobscript}
+        echo "${jobname}">>${joblist}
+
+		echo "${outdir}/${filename}_warp_su.mif" >> ${outdir}/subjects_warp_su.txt
+	done
+	bash ${utils}/submit_jobs_v9_wait ${joblist} ${stime} 8G ${threads} ${jobdir} ${nfods}
+	## update template
+	let count=count+1
+	cmd="bash ${scripts}/get_mean_masked_average.sh ${outdir}/subjects_warped.txt ${outdir}/subjects_masks.txt ${outdir}/fod_template_iter${count}.mif"
+	joblist="${jobdir}/joblist_avrg${count}.txt"
+	jobname="avrg${count}"
+	jobscript="${jobdir}/job_${jobname}_qsub.sh"
+	echo '#!/bin/bash'>${jobscript}
+	echo ${cmd}>>${jobscript}
+	echo ${jobname}>>${joblist}
+	bash ${utils}/submit_jobs_v9_wait ${joblist} ${ltime} 40G ${threads} ${jobdir} 1
+
+done
+
+
+
+
+

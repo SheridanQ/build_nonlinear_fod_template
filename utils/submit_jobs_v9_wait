@@ -1,0 +1,125 @@
+#!/bin/bash
+#set -x
+#set -e
+trap control_c SIGINT
+
+#setwd="/home/xqi10/BEEs_playground/1-T1_template_spnorm" #edit this
+if [ $# -lt 5 ]
+then
+	echo "This version has a flag for indicating how many jobs per batch. like I/O heavy jobs."
+	echo "This script is for running those command has reg suffix (not population, not sn)"
+	echo "==============================================================================="
+	echo "usage: `basename $0` jobnameonly_list walltime(00:00:00) qmem ppn workdir upperlmt_No_jobs_per_batches"
+	echo "==============================================================================="
+	echo "The standard job submition tool. Xiaoxiao Qi"
+	exit 1
+fi
+
+cleanup()
+{
+	runningjobs=$( ps --ppid $$ -o pid= )
+
+	for thePID in $runningjobs
+	do
+	echo "killing job ${thePID}"
+	kill ${thePID}
+	done
+	return $?
+}
+control_c()
+{
+	cleanup
+	qdel ${jobID}
+	exit $?
+
+}	
+number_of_lines=`cat $1 | wc -l`
+name_list=($(awk '{print $1}' $1))
+#que=$2
+wtime=$2
+qm=$3
+pron=$4
+setwd=$5
+cd $setwd
+setwd=$PWD
+den=$6
+
+
+
+cont=`expr ${number_of_lines} / ${den}` #number of batches not including the remainders
+
+up2=$(( ${number_of_lines} % ${den} )) #$(( ${cont} + 1 )) the remainders.The remainder gives the larger number batch numbers.
+mm1=$(( ${cont} + 1 )) #number of batches including the remainders. This many batch should have mm1 jobs per batch
+mm=$(( ${up2} * ${mm1} )) #larger number batches can cover this many jobs. 
+	
+up3=$(( ${den} - ${up2} )) #$ This number of batch should have smaller number of jobs per batch.
+mm2=${cont} #small batch has this number of jobs per batch
+mm3=$(( ${mm2} * ${up3} ))  #${cont}
+
+echo "The upper limit is ${den} jobs!"
+echo "Divided by ${den} batches"
+
+#echo "if ${number_of_lines} < ${den}, ${number_of_lines} submitted!"
+echo "${up3} batches will have ${mm2} jobs per batch, added up to ${mm3} jobs"
+echo "${up2} batches will have ${mm1} jobs per batch, added up to ${mm} jobs."
+echo "Submitting jobs......"
+
+#total job count
+temp=0
+
+#environment variables
+environment="-v ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS=2,OMP_NUM_THREADS=2" #DRTAMAS environment variables
+environment="${environment},MKL_NUM_THREADS=1"
+
+#job submitting process
+for ((h=0;h<${up2};h++))
+do
+	job="job_${name_list[${temp}]}_qsub.sh"
+	id=`qsub -j oe -N ${name_list[${temp}]} ${environment} -l walltime=${wtime} -l mem=${qm} -l nodes=1:CPU:ppn=${pron} $job | awk '{print $1}'`
+	#echo "$job submitted!"
+	((temp++))
+	jobID="${jobID} ${id}"
+	for ((g=0;g<$(( ${mm1} - 1 ));g++))
+	do
+		#echo "batch ${h}_${g}"
+		#echo ${name_list[${temp}]}
+		job="job_${name_list[${temp}]}_qsub.sh"
+		next=`qsub -j oe -N ${name_list[${temp}]} ${environment} -W depend=afterany:${id} -l walltime=${wtime} -l mem=${qm} -l nodes=1:CPU:ppn=${pron} ${job} | awk '{print $1}'`
+		#echo "$job submitted! Hold"
+		((temp++))
+		#echo ${next}
+		id=${next}
+		jobID="${jobID} ${id}"
+	done
+done
+#echo "output ${temp}"
+#echo "value g = ${g}"
+#echo "value h = ${h}"
+
+j=${temp}
+for ((l=0;l<${up3};l++))
+do 
+	job="job_${name_list[${j}]}_qsub.sh"
+	id=`qsub -j oe -N ${name_list[${j}]} ${environment} -l walltime=${wtime} -l mem=${qm} -l nodes=1:CPU:ppn=${pron} $job | awk '{print $1}'`
+       # echo "$job submitted!"
+	((j++))
+         jobID="${jobID} ${id}"
+	for ((g=0;g<$(( ${mm2} - 1 ));g++))
+	do
+		#echo "batch $(( ${h} + ${l} ))_${g}"
+		job="job_${name_list[${j}]}_qsub.sh"
+		next=`qsub -j oe -N ${name_list[${j}]} ${environment} -W depend=afterany:${id} -l walltime=${wtime} -l mem=${qm} -l nodes=1:CPU:ppn=${pron} ${job} | awk '{print $1}'`
+		#echo "$job submitted! Hold"
+		((j++))
+		id=${next}
+		jobID="${jobID} ${id}"
+	done
+done
+echo "Total number of jobs submitted: ${j}"
+ 
+#echo "value j = ${j}"
+#echo "value g = ${g}"
+#echo "value l = ${l}"
+
+
+waitForPBSQJobs.pl 1 20 $jobID
