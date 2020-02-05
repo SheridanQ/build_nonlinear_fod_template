@@ -121,5 +121,6 @@ echo "Total number of jobs submitted: ${j}"
 #echo "value g = ${g}"
 #echo "value l = ${l}"
 
-
-waitForPBSQJobs.pl 1 20 $jobID
+abspath=`realpath $0`
+absdir=`dirname ${abspath}`
+${absdir}/runningcheck.pl 1 20 $jobID

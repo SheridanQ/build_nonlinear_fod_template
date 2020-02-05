@@ -14,8 +14,8 @@ then
 fi
 
 # looking around
-scriptdir=$(dirname $0)
-echo ${scriptdir}
+abspath=`realpath $0`
+scriptdir=$(dirname $abspath)
 scripts=${scriptdir}/scripts
 utils=${scriptdir}/utils
 
@@ -25,12 +25,12 @@ if [ ! -e "${utils}/average_images.sh" ];then
 fi
 
 # parse inputs
-foddir=$1
-maskdir=$2
-outdir=$3
+foddir=`realpath $1`
+maskdir=`realpath $2`
+outdir=`realpath $3`
 
 # iterative registration parameters
-Niter=6
+Niter=2
 
 # cluster parameters
 njobs=78 # assuming 156 per person
@@ -48,7 +48,7 @@ check_count_fod=`ls -1 ${foddir}/*.mif 2>/dev/null | wc -l` # Hardcoded naming p
 if [ ! -e ${maskdir} ];then
 	echo "Fod directory not exists. Please indicate a valid directory."
 fi
-check_count_mask=`ls -1 ${foddir}/*_mask.nii.gz 2>/dev/null | wc -l` # Hardcoded naming pattern
+check_count_mask=`ls -1 ${maskdir}/*_mask.nii.gz 2>/dev/null | wc -l` # Hardcoded naming pattern
 
 if [ ${check_count_mask} != ${check_count_fod} ];then
 	echo "Number of masks does not match the number of fod images."
@@ -62,11 +62,10 @@ if [ ! -e ${outdir} ];then
 fi
 
 # Preparing for initiation
-if [ -e ${outdir}/subjects*.txt ];then
+if [ -e "${outdir}/subjects.txt" ];then
 	# Clean up
 	rm ${outdir}/subjects*.txt
 fi
-
 num=0
 for subj in `ls ${foddir}`
 do 
@@ -74,10 +73,18 @@ do
 	purename=${fodname%.*}
 	fods_list[${num}]=${foddir}/${fodname}
 	masks_list[${num}]=${maskdir}/${purename}_mask.nii.gz # hardcoded
-	echo ${subj} >> ${outdir}/subjects.txt
-	echo ${maskdir}/${purename}_mask.mif >> ${outdir}/subjects_masks.txt
+	echo ${foddir}/${fodname} >> ${outdir}/subjects.txt
+	echo ${maskdir}/${purename}_mask.nii.gz >> ${outdir}/subjects_masks.txt
+	## record anticipated outputs
+    echo "${outdir}/${purename}_warp.mif" >> ${outdir}/subjects_warps.txt
+    echo "${outdir}/${purename}_warp.nii.gz" >> ${outdir}/subjects_warps_ants.txt
+    echo "${outdir}/${purename}_warp_inv.mif" >> ${outdir}/subjects_warps_inv.txt
+    echo "${outdir}/${purename}_warped.mif" >> ${outdir}/subjects_warped.txt
+    echo "${outdir}/${purename}_warp_su.mif" >> ${outdir}/subjects_warp_su.txt
+    #echo "${outdir}/${purename}_warp_inv.nii.gz" >> ${outdir}/subjects_warps_inv_ants.txt
 	let num=num+1
 done
+
 # Checking names of masks by length of the lists
 nfods=${#fods_list[@]}
 nmasks=${#masks_list[@]}
@@ -107,7 +114,7 @@ jobscript="${jobdir}/job_${jobname}_qsub.sh"
 echo '#!/bin/bash'>${jobscript}
 echo ${cmd0}>>${jobscript}
 echo ${jobname}>>${joblist}
-bash ${utils}/submit_jobs_v9_wait ${joblist} ${ltime} 40G ${threads} ${jobdir} 1
+bash ${utils}/submit_jobs_v9_wait ${joblist} ${ltime} 20G ${threads} ${jobdir} 1
 
 # main loop
 while [ ${count} -lt ${Niter} ] # start from 0
@@ -140,14 +147,6 @@ do
         echo '#!/bin/bash'>${jobscript}
         echo ${cmd}>>${jobscript}
         echo ${jobname}>>${joblist}
-
-        ## record outputs
-        echo "${outdir}/${filename}_warp.mif" >> ${outdir}/subjects_warps.txt
-        echo "${outdir}/${filename}_warp.nii.gz" >> ${outdir}/subjects_warps_ants.txt
-        echo "${outdir}/${filename}_warp_inv.mif" >> ${outdir}/subjects_warps_inv.txt
-        echo "${outdir}/${filename}_warped.mif" >> ${outdir}/subjects_warped.txt
-        #echo "${outdir}/${filename}_warp_inv.nii.gz" >> ${outdir}/subjects_warps_inv_ants.txt
-        
     done
         bash ${utils}/submit_jobs_v9_wait ${joblist} ${stime} 8G ${threads} ${jobdir} ${nfods}
 
@@ -185,8 +184,6 @@ do
         echo ${cmd3}>>${jobscript}
         echo ${cmd4}>>${jobscript}
         echo "${jobname}">>${joblist}
-
-		echo "${outdir}/${filename}_warp_su.mif" >> ${outdir}/subjects_warp_su.txt
 	done
 	bash ${utils}/submit_jobs_v9_wait ${joblist} ${stime} 8G ${threads} ${jobdir} ${nfods}
 	## update template
@@ -198,11 +195,6 @@ do
 	echo '#!/bin/bash'>${jobscript}
 	echo ${cmd}>>${jobscript}
 	echo ${jobname}>>${joblist}
-	bash ${utils}/submit_jobs_v9_wait ${joblist} ${ltime} 40G ${threads} ${jobdir} 1
+	bash ${utils}/submit_jobs_v9_wait ${joblist} ${ltime} 20G ${threads} ${jobdir} 1
 
 done
-
-
-
-
-
