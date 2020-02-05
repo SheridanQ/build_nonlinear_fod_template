@@ -15,11 +15,13 @@ fi
 
 # looking around
 scriptdir=$(dirname $0)
+echo ${scriptdir}
 scripts=${scriptdir}/scripts
 utils=${scriptdir}/utils
 
 if [ ! -e "${utils}/average_fods.sh" ];then
-	"Can't find utility files. Please check path or change \${scriptdir}."
+	echo "Can't find utility files. Please check path or change \${scriptdir}."
+	exit
 fi
 
 # parse inputs
