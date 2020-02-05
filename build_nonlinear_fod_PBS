@@ -46,7 +46,7 @@ check_count_fod=`ls -1 ${foddir}/*.mif 2>/dev/null | wc -l` # Hardcoded naming p
 if [ ! -e ${maskdir} ];then
 	echo "Fod directory not exists. Please indicate a valid directory."
 fi
-check_count_mask=`ls -1 ${foddir}/*_mask.mif 2>/dev/null | wc -l` # Hardcoded naming pattern
+check_count_mask=`ls -1 ${foddir}/*_mask.nii.gz 2>/dev/null | wc -l` # Hardcoded naming pattern
 
 if [ ${check_count_mask} != ${check_count_fod} ];then
 	echo "Number of masks does not match the number of fod images."
@@ -71,7 +71,7 @@ do
 	fodname=$(basename "${subj}")
 	purename=${fodname%.*}
 	fods_list[${num}]=${foddir}/${fodname}
-	masks_list[${num}]=${maskdir}/${purename}_mask.mif # hardcoded
+	masks_list[${num}]=${maskdir}/${purename}_mask.nii.gz # hardcoded
 	echo ${subj} >> ${outdir}/subjects.txt
 	echo ${maskdir}/${purename}_mask.mif >> ${outdir}/subjects_masks.txt
 	let num=num+1
