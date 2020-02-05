@@ -7,3 +7,5 @@ Build FOD template from linearly aligned FOD images, following "very restricted"
 ## Python dependencies:
 `numpy`, `nibabel`
 
+## Software dependencies:
+[ANTs](https://github.com/ANTsX/ANTs), [MRtrix3](https://github.com/MRtrix3/mrtrix3)
