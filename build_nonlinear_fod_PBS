@@ -198,3 +198,8 @@ do
 	bash ${utils}/submit_jobs_v9_wait ${joblist} ${ltime} 20G ${threads} ${jobdir} 1
 
 done
+
+mrconvert ${outdir}/mask_sum.mif ${outdir}/mask_sum.nii.gz
+fslmaths ${outdir}/mask_sum.nii.gz -div ${nfods} -thr 0.5 -bin ${outdir}/fod_template_mask.nii.gz
+bash ${utils}/mul_images.sh ${output}/fod_template_iter${count}.mif ${outdir}/fod_template_mask.nii.gz ${output}/fod_template.nii.gz
+
