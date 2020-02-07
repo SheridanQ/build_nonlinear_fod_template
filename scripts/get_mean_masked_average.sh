@@ -27,8 +27,8 @@ tmpdir=${outdir}/tmp_${RANDOM}_${RANDOM}_${RANDOM}_$$
 
 #cmds
 bash ${sum} ${subj_list} ${tmpdir}/fod_sum.mif
-bash ${sum} ${mask_list} ${tmpdir}/mask_sum.mif
-bash ${div} ${tmpdir}/fod_sum.mif ${tmpdir}/mask_sum.mif ${mmtemplate}
+bash ${sum} ${mask_list} ${outdir}/mask_sum.mif
+bash ${div} ${tmpdir}/fod_sum.mif ${outdir}/mask_sum.mif ${mmtemplate}
 
 # clean up
 rm -rf ${tmpdir}

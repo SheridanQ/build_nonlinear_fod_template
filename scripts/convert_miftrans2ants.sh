@@ -32,7 +32,7 @@ scalar_source=${tmpdir}/power_source.nii.gz
 combined_disp=${tmpdir}/dp_dummyCombined.nii.gz
 corrected_dp=${outdp} 
 
-warpconvert ${fod_warp} -type warpfull2displacement -template ${fod_target} ${origin_dp} -nthreads 1
+warpconvert ${fod_warp} -type deformation2displacement -template ${fod_target} ${origin_dp} -nthreads 1
 sh2power ${fod_target} ${scalar_template} -nthreads 1
 sh2power ${fod_source} ${scalar_source} -nthreads 1
 bash ${tool_dummy} ${tmpdir} ${scalar_source} ${scalar_template}

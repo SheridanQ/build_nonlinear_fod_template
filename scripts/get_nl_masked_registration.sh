@@ -38,7 +38,6 @@ mrregister ${tmpdir}/fod_masked.mif ${tmpdir}/template_masked.mif \
 			-type nonlinear \
 			-nl_warp ${outdir}/${filename}_warp.mif ${outdir}/${filename}_warp_inv.mif \
 			-transformed ${outdir}/${filename}_warped.mif \
-			-nl_warp_full ${tmpdir}/${filename}_warpfull.mif \
 			-mask1 ${moving_mask} \
 			-mask2 ${moving_mask} \
 			-nthreads ${threads} \
@@ -48,7 +47,7 @@ bash ${mul} ${outdir}/${filename}_warp_inv.mif ${moving_mask} ${outdir}/${filena
 
 # convert mif transformation to ants
 
-bash ${convert} ${tmpdir}/fod_masked.mif ${tmpdir}/${filename}_warpfull.mif \
+bash ${convert} ${tmpdir}/fod_masked.mif ${outdir}/${filename}_warp.mif \
 	 ${tmpdir}/template_masked.mif ${outdir}/${filename}_warp.nii.gz
 #bash ${convert} ${tmpdir}/template_masked.mif ${outdir}/${filename}_warp_inv.mif \
 #     ${tmpdir}/fod_masked.mif ${outdir}/${filename}_warp_inv.nii.gz
