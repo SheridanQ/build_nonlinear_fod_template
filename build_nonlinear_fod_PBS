@@ -172,8 +172,10 @@ do
 
         cmd1="bash ${utils}/mul_images.sh ${outdir}/avrginvwarp_iter${count}.mif ${mask} ${outdir}/${filename}_warp_su.mif"
         cmd2="bash ${scripts}/convert_miftrans2ants.sh ${template_name} ${outdir}/${filename}_warp_su.mif ${fod} ${outdir}/${filename}_warp_su.nii.gz"
-        cmd3="transformcompose -template ${template_name} ${outdir}/${filename}_warp.mif ${outdir}/${filename}_warp_su.mif ${outdir}/${filename}_warp_comb.mif -nthreads ${threads} -force -datatype float32"
-        cmd4="mrtransform -warp ${outdir}/${filename}_warp_comb.mif -template ${template_name} ${fod} ${outdir}/${filename}_warped.mif -nthreads ${threads} -force -datatype float32"
+        # cmd3="transformcompose -template ${template_name} ${outdir}/${filename}_warp.mif ${outdir}/${filename}_warp_su.mif ${outdir}/${filename}_warp_comb.mif -nthreads ${threads} -force -datatype float32"
+        # cmd4="mrtransform -warp ${outdir}/${filename}_warp_comb.mif -template ${template_name} ${fod} ${outdir}/${filename}_warped.mif -nthreads ${threads} -force -datatype float32"
+        cmd3="trans=\`bash ${scripts}/Get_previous_transformations.sh ${filename} ${count} FOD\`"
+        cmd4="bash ${scripts}/trans2fod.sh ${fod} \${trans} ${template_name} ${outdir}/${filename}_warped.mif"
 
         joblist="${jobdir}/joblist_update.txt"
         jobname="fod_su${count}_${i}"
